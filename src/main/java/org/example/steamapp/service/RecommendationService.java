@@ -5,12 +5,9 @@ import org.example.steamapp.model.Game;
 import org.example.steamapp.model.GameRecommendation;
 import org.example.steamapp.model.Genre;
 import org.example.steamapp.model.UserProfile;
-import org.example.steamapp.service.SteamApiService;
-import org.example.steamapp.service.SteamStoreParserService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -19,10 +16,19 @@ public class RecommendationService {
 
     private final SteamApiService steamApiService;
     private final SteamStoreParserService steamStoreParserService;
+    private final SteamGameParserService steamGameParserService;
 
-    public RecommendationService(SteamApiService steamApiService, SteamStoreParserService steamStoreParserService) {
+    public RecommendationService(SteamApiService steamApiService, SteamStoreParserService steamStoreParserService, SteamGameParserService steamGameParserService) {
         this.steamApiService = steamApiService;
         this.steamStoreParserService = steamStoreParserService;
+        this.steamGameParserService = steamGameParserService;
+    }
+
+    public List<Game> getTopGames(UserProfile userProfile, int limit) {
+        return userProfile.getGames().stream()
+                .sorted(Comparator.comparing(Game::getPlaytimeForever).reversed())
+                .limit(limit)
+                .collect(Collectors.toList());
     }
 
     public GameRecommendation generateRecommendations(String steamId) {
@@ -30,11 +36,11 @@ public class RecommendationService {
         UserProfile userProfile = steamApiService.getUserProfile(steamId);
 
         // Get top 15 games by playtime
-        List<Game> topGames = steamApiService.getTopGames(userProfile, 15);
+        List<Game> topGames = getTopGames(userProfile, 15);
 
         // Get genres for each game
         for (Game game : topGames) {
-            List<Genre> genres = steamStoreParserService.getGameGenres(game.getAppId());
+            List<Genre> genres = steamGameParserService.getGameGenres(game.getAppId());
             game.setGenres(genres);
         }
 
@@ -66,8 +72,11 @@ public class RecommendationService {
         // Find recommended games for these genres
         List<Game> recommendedGames = steamStoreParserService.findTopGamesByGenres(topGenres, 6, 3);
 
+
+        // recomendedGames filter out all duplicates then get the game info
+
         for(Game game : recommendedGames) {
-            log.info("recommended games befeore: {}", game.getName());
+            log.info("RECOMMENDATION SERVICE recommended games befeore: {}", game.getName());
         }
 
         // Filter out games the user already owns
@@ -80,21 +89,27 @@ public class RecommendationService {
                 //.collect(Collectors.toList());
 
         //Filter duplicates
+        recommendedGames = new ArrayList<>(
+                recommendedGames.stream()
+                        .collect(Collectors.toMap(
+                                Game::getAppId,        // Key by appId
+                                Function.identity(),    // Value is the game itself
+                                (existing, replacement) -> existing,  // On duplicate key, keep first occurrence
+                                LinkedHashMap::new     // Use LinkedHashMap to maintain order
+                        ))
+                        .values()
+        );
 
-        recommendedGames = recommendedGames.stream()
-                .collect(Collectors.collectingAndThen(
-                        Collectors.toMap(
-                                Game::getAppId,
-                                game -> game,
-                                (existing, replacement) -> existing
-                        ),
-                        map -> new ArrayList<>(map.values())
-                ));
 
-        for(Game game : recommendedGames) {
-            log.info("recommended games after: {}", game.getName());
+        // Get genres for each game
+        for (Game game : recommendedGames) {
+            List<Genre> genres = steamGameParserService.getGameGenres(game.getAppId());
+            game.setGenres(genres);
         }
 
+        for(Game game : recommendedGames) {
+            log.info("RECOMMENDATION SERVICE recommended games after: {}", game.getName());
+        }
 
         return GameRecommendation.builder()
                 .userProfile(userProfile)

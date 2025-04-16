@@ -38,12 +38,13 @@ public class RecommendationController {
 
     @PostMapping("/recommendations")
     public String getRecommendations(@RequestParam String steamId, Model model) {
-        GameRecommendation recommendation = recommendationService.generateRecommendations(steamId);
+        GameRecommendation recommendation = recommendationCache.get(steamId);
+        if (recommendation==null) {
+            log.info("cached recommendation is EMPTY!");
+            recommendation = recommendationService.generateRecommendations(steamId);
+        }
 
-        List<Game> topGames = recommendation.getUserProfile().getGames().stream()
-                .sorted(Comparator.comparing(Game::getPlaytimeForever).reversed())
-                .limit(15)
-                .collect(Collectors.toList());
+        List<Game> topGames = recommendationService.getTopGames(recommendation.getUserProfile(), 15);
 
         recommendationCache.put(steamId, recommendation);
 
@@ -52,34 +53,27 @@ public class RecommendationController {
         return "recommendations";
     }
 
-    @GetMapping("/api/recommendations/{steamId}")
+    @GetMapping("api/recommendations/{steamId}")
     @ResponseBody
-    public GameRecommendation getRecommendationsApi(@PathVariable String steamId) {
-        /*
-        // Check if we have cached recommendations
-        GameRecommendation cachedRecommendation = recommendationCache.get(steamId);
-        if (cachedRecommendation != null) {
-            return cachedRecommendation;
+    public GameRecommendation getRecommendationsApi(@PathVariable String steamId, Model model) {
+        GameRecommendation recommendation = recommendationCache.get(steamId);
+        if (recommendation==null) {
+            log.info("cached recommendation is EMPTY!");
+            recommendation = recommendationService.generateRecommendations(steamId);
         }
-
-        // Generate new recommendations if not in cache
-        GameRecommendation recommendation = recommendationService.generateRecommendations(steamId);
         recommendationCache.put(steamId, recommendation);
-        return recommendation;*/
-
-        return recommendationService.generateRecommendations(steamId);
+        return recommendation;
     }
 
     @GetMapping("/download-report/{steamId}")
     public ResponseEntity<byte[]> downloadReport(@PathVariable String steamId) {
         try {
             GameRecommendation recommendation = recommendationCache.get(steamId);
-            if (recommendation.getRecommendedGames().isEmpty()) {
+            if (recommendation==null) {
                 log.info("cached recommendation is EMPTY!");
                 recommendation = recommendationService.generateRecommendations(steamId);
             }
             recommendationCache.put(steamId, recommendation);
-            //GameRecommendation recommendation = recommendationService.generateRecommendations(steamId);
             byte[] report = excelReportService.generateReport(recommendation);
 
             return ResponseEntity.ok()

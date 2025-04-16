@@ -1,24 +1,17 @@
 package org.example.steamapp.service;
 
 import lombok.extern.slf4j.Slf4j;
-import org.example.steamapp.model.Genre;
-import org.example.steamapp.service.SteamStoreParserService;
 import org.example.steamapp.config.AppConfig;
 import org.example.steamapp.model.Game;
 import org.example.steamapp.model.UserProfile;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -27,13 +20,12 @@ public class SteamApiService {
     private final RestTemplate restTemplate;
     private final AppConfig appConfig;
     private final ObjectMapper objectMapper;
-    private final SteamStoreParserService steamStoreParserService;
 
+    @Autowired
     public SteamApiService(RestTemplate restTemplate, AppConfig appConfig) {
         this.restTemplate = restTemplate;
         this.appConfig = appConfig;
         this.objectMapper = new ObjectMapper();
-        this.steamStoreParserService = new SteamStoreParserService();
     }
 
     public UserProfile getUserProfile(String steamId) {
@@ -64,12 +56,10 @@ public class SteamApiService {
 
             if (gamesNodes.isArray()) {
                 for (JsonNode gameNode : gamesNodes) {
-                    log.info("Game: {}", gameNode.path("name").asText());
                     Game game = Game.builder()
                             .appId(gameNode.path("appid").asLong())
                             .name(gameNode.path("name").asText())
                             .playtimeForever(gameNode.path("playtime_forever").asInt())
-                            //.imageUrl(String.format("https://media.steampowered.com/steamcommunity/public/images/apps/%d/%s.jpg",
                             .imageUrl(String.format("https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/%s/header.jpg",
                                     gameNode.path("appid").asLong()))
                             .build();
@@ -89,10 +79,30 @@ public class SteamApiService {
         }
     }
 
-    public List<Game> getTopGames(UserProfile userProfile, int limit) {
-        return userProfile.getGames().stream()
-                .sorted(Comparator.comparing(Game::getPlaytimeForever).reversed())
-                .limit(limit)
-                .collect(Collectors.toList());
+    public Game getGameInfoById(Long appId) {
+        try {
+            // Get user summary
+            log.info("Collecting game info");
+            String gameUrl = "https://store.steampowered.com/api/appdetails?appids=" + appId +"&l=en";
+            log.info(gameUrl);
+
+            String gameResponse = restTemplate.getForObject(gameUrl, String.class);
+            JsonNode gameJson = objectMapper.readTree(gameResponse);
+            log.info("Got game");
+
+            String gameName = gameJson.path(appId.toString()).path("data").path("name").asText();
+            String imageUrl = gameJson.path(appId.toString()).path("data").path("header_image").asText();
+            log.info(gameName);
+
+            return Game.builder()
+                    .appId(appId)
+                    .name(gameName)
+                    .imageUrl(imageUrl)
+                    .build();
+        } catch (IOException e) {
+            System.err.println("Error parsing game details for appId: " + appId);
+            System.err.println("Error parsing : " + e);
+            return new Game();
+        }
     }
 }
