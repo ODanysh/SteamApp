@@ -68,7 +68,7 @@ public class ExcelReportService {
             int topGameRowIndex = 1;
             for (Game game : recommendation.getUserProfile().getGames().stream()
                     .sorted((g1, g2) -> Integer.compare(g2.getPlaytimeForever(), g1.getPlaytimeForever()))
-                    .limit(10)
+                    .limit(15)
                     .toList()) {
                 Row gameRow = topGamesSheet.createRow(topGameRowIndex++);
                 gameRow.createCell(0).setCellValue(game.getAppId());
@@ -88,7 +88,7 @@ public class ExcelReportService {
             Row recommendationsHeaderRow = recommendationsSheet.createRow(0);
             recommendationsHeaderRow.createCell(0).setCellValue("Game ID");
             recommendationsHeaderRow.createCell(1).setCellValue("Name");
-            recommendationsHeaderRow.createCell(2).setCellValue("Matching Genre");
+            recommendationsHeaderRow.createCell(2).setCellValue("Genre");
             recommendationsHeaderRow.getCell(0).setCellStyle(headerStyle);
             recommendationsHeaderRow.getCell(1).setCellStyle(headerStyle);
             recommendationsHeaderRow.getCell(2).setCellStyle(headerStyle);
@@ -101,12 +101,12 @@ public class ExcelReportService {
 
                 String genres = "";
                 for (Genre genre : game.getGenres().stream().toList()) {
-                    genres = genre.getText() != null ? String.join(", ", genre.getText()) : "";
+                    genres = genre.getText() + ", ";
                 }
                 recRow.createCell(2).setCellValue(genres);
             }
 
-            // Auto size columns for all sheets
+            // Auto size columns
             for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
                 Sheet sheet = workbook.getSheetAt(i);
                 for (int j = 0; j < 4; j++) {

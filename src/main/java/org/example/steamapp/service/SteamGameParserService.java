@@ -17,16 +17,15 @@ public class SteamGameParserService {
 
     public List<Genre> getGameGenres(Long appId) {
         try {
-            // Set up cookies directly to bypass age check
+            // Cookies to bypass age check
             Map<String, String> cookies = new HashMap<>();
-            cookies.put("birthtime", "283993201"); // January 1, 1979
-            cookies.put("mature_content", "1");    // Confirm we're mature
-            cookies.put("lastagecheckage", "1-1-1979"); // Last check date
-            cookies.put("wants_mature_content", "1");   // We want mature content
+            cookies.put("birthtime", "283993201");
+            cookies.put("mature_content", "1");
+            cookies.put("lastagecheckage", "1-1-1979");
+            cookies.put("wants_mature_content", "1");
 
-            log.info("Getting Steam Genres");
+            // Parse steam game store
             String url = "https://store.steampowered.com/app/" + appId;
-            log.info("Steam Genres: {}", url);
             Document doc = Jsoup.connect(url)
                     .userAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/33.0.1750.152 Safari/537.36")
                     .cookies(cookies)
@@ -36,21 +35,21 @@ public class SteamGameParserService {
                     .followRedirects(true)
                     .get();
 
+            // Get genres of the game
             Elements genreElements = doc.select(".app_tag");
-            log.info("Found {} elements", genreElements.size());
             List<Genre> genres = new ArrayList<>();
 
             for (Element genreElement : genreElements) {
                 genres.add(new Genre(genreElement.attr("href"), genreElement.text()));
-                log.info("Added genre {}", genreElement.attr("href"));
                 if (genres.size() >= 5) {
                     break;
                 }
             }
-            log.info("return genres");
+
             return genres;
+
         } catch (IOException e) {
-            System.err.println("Error parsing game details for appId: " + appId);
+            System.err.println("Error parsing game genres for appId: " + appId);
             System.err.println("Error parsing : " + e);
             return Collections.emptyList();
         }

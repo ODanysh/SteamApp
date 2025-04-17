@@ -3,14 +3,14 @@ package org.example.steamapp.service;
 import lombok.extern.slf4j.Slf4j;
 import org.example.steamapp.model.Game;
 import org.example.steamapp.model.Genre;
-import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.*;
+import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+
+import java.time.Duration;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -28,63 +28,52 @@ public class SteamStoreParserService {
     }
 
     public List<Game> findTopGamesByGenres(List<String> genres, int limit, int genreLimit) {
-        log.info("Finding top games by genres");
-        log.info("Genres: {}", genres);
-
+        // Create driver to load store page
         List<Game> recommendedGames = new ArrayList<>();
-        Set<Long> processedAppIds = new HashSet<>();
-        List<Genre> listOfGenres = new ArrayList<>();
-        log.info("1");
-
         WebDriver driver = getWebDriver();
 
+        // Find top games in each genre
         int genreCount = 0;
         try {
             for (String genre : genres) {
                 if (genreCount >= genreLimit) break;
                 genreCount++;
                 String url = "https://store.steampowered.com/category/" + genre.toLowerCase();
-                log.info("url: {}", url);
                 driver.get(url);
 
-                log.info("genre: {}", genre);
 
                 // Scroll down to trigger lazy loading
                 JavascriptExecutor js = (JavascriptExecutor) driver;
                 js.executeScript("window.scrollBy(0, 1000)");
-                Thread.sleep(1000);
 
-
-                // Wait for the page to load the game elements
-                // Do a cycle where checking if found game elements
-                // If not sleep for another 100-1000 and try to parse again
-
-                log.info("Trying to find top games by genre {}", genre);
-
-                // Find all links containing "/app/" which likely point to games
                 List<WebElement> gameElements = driver.findElements(By.cssSelector("a[href*='/app/']"));
-                log.info("Found " + gameElements.size() + " game links");
 
+                //Waiting for elements to load
+                if (gameElements.isEmpty()) {
+                    try {
+                        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(7));
+                        wait.until(_ -> !driver.findElements(By.cssSelector("a[href*='/app/']")).isEmpty());
+                        gameElements = driver.findElements(By.cssSelector("a[href*='/app/']"));
+                    } catch (TimeoutException e) {
+                        System.out.println("No game elements found after waiting 7 seconds");
+                    }
+                }
 
-                log.info("Found " + gameElements.size() + " game elements");
 
                 int count = 0;
                 for (WebElement gameElement : gameElements) {
                     if (count >= limit) break;
 
                     String href = gameElement.getAttribute("href");
-                    log.info("Found href: {}", href);
 
-                    // Extract game ID using regex
+                    // Extract game ID from url
                     Matcher matcher = Pattern.compile("/app/(\\d+)/").matcher(href);
                     if (matcher.find()) {
                         String gameId = matcher.group(1);
-                        log.info("Found gameId: {}", gameId);
                         count++;
+                        // Get Game info from id
                         Game game = steamApiService.getGameInfoById(Long.valueOf(gameId));
-                        log.info("Found game");
                         recommendedGames.add(game);
-                        log.info("recommended games before: {}", game.getName());
 
                     }
                 }
@@ -95,16 +84,13 @@ public class SteamStoreParserService {
             System.err.println("Error scraping Steam: " + e.getMessage());
         }
         finally {
-            // Clean up
             driver.quit();
-        }
-        for(Game game : recommendedGames) {
-            log.info("recommended games after: {}", game.getName());
         }
         return recommendedGames;
     }
 
     private static WebDriver getWebDriver() {
+        // Set up WebDriver
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--headless");
         options.addArguments("--disable-gpu");
@@ -112,8 +98,7 @@ public class SteamStoreParserService {
         options.addArguments("--disable-blink-features=AutomationControlled"); // Avoid detection
         options.addArguments("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
-        WebDriver driver = new ChromeDriver(options);
-        return driver;
+        return new ChromeDriver(options);
     }
 }
 

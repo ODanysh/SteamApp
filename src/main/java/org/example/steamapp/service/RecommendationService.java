@@ -33,18 +33,22 @@ public class RecommendationService {
 
     public GameRecommendation generateRecommendations(String steamId) {
         // Get user profile
+        log.info("Geting user info for {}", steamId);
         UserProfile userProfile = steamApiService.getUserProfile(steamId);
 
+
         // Get top 15 games by playtime
+        log.info("Getting top played games");
         List<Game> topGames = getTopGames(userProfile, 15);
 
-        // Get genres for each game
+        // Get genres for this 15 games
+        log.info("Finding most played genres");
         for (Game game : topGames) {
             List<Genre> genres = steamGameParserService.getGameGenres(game.getAppId());
             game.setGenres(genres);
         }
 
-        // Calculate favorite genres
+        // Sum-up genres
         Map<String, Integer> genreCount = new HashMap<>();
         for (Game game : topGames) {
             for (Genre genre : game.getGenres()) {
@@ -64,51 +68,42 @@ public class RecommendationService {
                         LinkedHashMap::new
                 ));
 
-        // Get top 5 genres
+        // Get top 6 genres
         List<String> topGenres = favoriteGenres.keySet().stream()
                 .limit(6)
                 .collect(Collectors.toList());
 
-        // Find recommended games for these genres
+        // Find games in favorite genres
+        log.info("Getting game recommendations");
         List<Game> recommendedGames = steamStoreParserService.findTopGamesByGenres(topGenres, 6, 3);
 
-
-        // recomendedGames filter out all duplicates then get the game info
-
-        for(Game game : recommendedGames) {
-            log.info("RECOMMENDATION SERVICE recommended games befeore: {}", game.getName());
-        }
-
-        // Filter out games the user already owns
+        // Get owned games ID`s
         Set<Long> ownedGameIds = userProfile.getGames().stream()
                 .map(Game::getAppId)
                 .collect(Collectors.toSet());
 
+        // Filter out games the user already owns
         recommendedGames = recommendedGames.stream()
                 .filter(game -> !ownedGameIds.contains(game.getAppId())).toList();
                 //.collect(Collectors.toList());
 
-        //Filter duplicates
+        //Filter out duplicates
         recommendedGames = new ArrayList<>(
                 recommendedGames.stream()
                         .collect(Collectors.toMap(
-                                Game::getAppId,        // Key by appId
-                                Function.identity(),    // Value is the game itself
-                                (existing, replacement) -> existing,  // On duplicate key, keep first occurrence
-                                LinkedHashMap::new     // Use LinkedHashMap to maintain order
+                                Game::getAppId,
+                                Function.identity(),
+                                (existing, replacement) -> existing,
+                                LinkedHashMap::new
                         ))
                         .values()
         );
 
-
-        // Get genres for each game
+        // Get genres for recommended games
+        log.info("Loading genres");
         for (Game game : recommendedGames) {
             List<Genre> genres = steamGameParserService.getGameGenres(game.getAppId());
             game.setGenres(genres);
-        }
-
-        for(Game game : recommendedGames) {
-            log.info("RECOMMENDATION SERVICE recommended games after: {}", game.getName());
         }
 
         return GameRecommendation.builder()

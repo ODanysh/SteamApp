@@ -5,7 +5,6 @@ import org.example.steamapp.model.GameRecommendation;
 import org.example.steamapp.model.Game;
 import org.example.steamapp.service.ExcelReportService;
 import org.example.steamapp.service.RecommendationService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Controller
@@ -39,7 +37,7 @@ public class RecommendationController {
     @PostMapping("/recommendations")
     public String getRecommendations(@RequestParam String steamId, Model model) {
         GameRecommendation recommendation = recommendationCache.get(steamId);
-        if (recommendation==null) {
+        if (recommendation == null) {
             log.info("cached recommendation is EMPTY!");
             recommendation = recommendationService.generateRecommendations(steamId);
         }
@@ -50,6 +48,7 @@ public class RecommendationController {
 
         model.addAttribute("recommendation", recommendation);
         model.addAttribute("topGames", topGames);
+
         return "recommendations";
     }
 
